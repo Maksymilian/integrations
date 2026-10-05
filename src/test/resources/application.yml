@@ -1,0 +1,36 @@
+# resilience4j-spring-boot4 builds one registry per pattern from this, and the annotations and
+# PricingService look instances up by name. An instance not listed here gets the "default" config.
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 4
+        minimum-number-of-calls: 4
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+    instances:
+      prices:
+        base-config: default
+      inventory:
+        base-config: default
+        wait-duration-in-open-state: 10s
+        # a full bulkhead is our own load shedding, not the inventory service failing
+        ignore-exceptions:
+          - io.github.resilience4j.bulkhead.BulkheadFullException
+  retry:
+    instances:
+      inventory:
+        max-attempts: 3
+        wait-duration: 10ms
+        # only a failed call is worth another try: an open breaker or a full bulkhead is not
+        retry-exceptions:
+          - org.springframework.web.client.RestClientException
+  # @Bulkhead(type = THREADPOOL) reads this section, not "bulkhead", which is for the semaphore kind
+  thread-pool-bulkhead:
+    instances:
+      inventory:
+        # one call at a time on the bulkhead's own thread, one more waiting, the next one refused
+        core-thread-pool-size: 1
+        max-thread-pool-size: 1
+        queue-capacity: 1
